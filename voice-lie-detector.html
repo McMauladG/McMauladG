@@ -338,6 +338,19 @@
         .error-message.active {
             display: block;
         }
+
+        .score-breakdown {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        .score-breakdown div {
+            padding: 5px 0;
+            color: #555;
+        }
     </style>
 </head>
 <body>
@@ -380,6 +393,8 @@
                     <div class="meter-fill" id="meterFill"></div>
                 </div>
             </div>
+
+            <div class="score-breakdown" id="scoreBreakdown"></div>
 
             <div class="analysis-results" id="analysisResults"></div>
 
@@ -474,135 +489,159 @@
                 return;
             }
 
-            let score = 0;
+            let score = 50; // START AT 50 (neutral) instead of 0
             const findings = [];
+            const breakdown = {};
 
-            const punctCount = (text.match(/[!?]{2,}/g) || []).length;
-            if (punctCount > 0) {
-                score += punctCount * 5;
-                findings.push({
-                    type: 'warning',
-                    title: 'Emphatic Tone',
-                    text: 'Detected emphatic punctuation marks'
-                });
-            }
-
-            const fillers = ['um', 'uh', 'like', 'you know', 'er', 'ah', 'hmm'];
+            // FILLER WORDS - VERY IMPORTANT
+            const fillers = ['um', 'uh', 'like', 'you know', 'er', 'ah', 'hmm', 'well', 'so', 'basically'];
             let fillerCount = 0;
             fillers.forEach(f => {
                 fillerCount += (text.match(new RegExp('\\b' + f + '\\b', 'gi')) || []).length;
             });
-            if (fillerCount > 5) {
-                score += Math.min(15, fillerCount * 2);
+            if (fillerCount >= 1) {
+                score += fillerCount * 5;
+                breakdown.fillers = fillerCount * 5;
                 findings.push({
                     type: 'warning',
-                    title: 'Excessive Filler Words',
-                    text: 'Multiple filler words detected - may indicate hesitation'
+                    title: `Filler Words (${fillerCount})`,
+                    text: `"${fillers.filter(f => text.toLowerCase().includes(f)).join('", "')}" - indicates hesitation`
                 });
             }
 
-            const qualifiers = ['I think', 'I believe', 'maybe', 'probably', 'possibly', 'somewhat', 'kind of', 'sort of', 'I guess'];
+            // QUALIFIERS - STRONG INDICATOR
+            const qualifiers = ['I think', 'I believe', 'I guess', 'maybe', 'probably', 'possibly', 'sort of', 'kind of', 'I suppose', 'somewhat'];
             let qualifierCount = 0;
             qualifiers.forEach(q => {
                 qualifierCount += (text.match(new RegExp(q, 'gi')) || []).length;
             });
-            if (qualifierCount > 2) {
-                score += qualifierCount * 3;
+            if (qualifierCount >= 1) {
+                score += qualifierCount * 8;
+                breakdown.qualifiers = qualifierCount * 8;
                 findings.push({
                     type: 'warning',
-                    title: 'Defensive Qualifiers',
-                    text: 'Qualifying phrases suggest uncertainty'
+                    title: `Defensive Qualifiers (${qualifierCount})`,
+                    text: 'Softening language suggests uncertainty or lack of confidence'
                 });
             }
 
-            const denials = ['I didn\'t', 'I never', 'I wouldn\'t', 'I don\'t', 'not', 'no', 'never'];
+            // DENIALS - VERY SUSPICIOUS
+            const denials = ['I didn\'t', 'I never', 'I wouldn\'t', 'I don\'t', 'didn\'t', 'never', 'no way'];
             let denialCount = 0;
             denials.forEach(d => {
                 denialCount += (text.match(new RegExp('\\b' + d + '\\b', 'gi')) || []).length;
             });
-            if (denialCount > 4) {
-                score += denialCount * 2;
+            if (denialCount >= 2) {
+                score += denialCount * 10;
+                breakdown.denials = denialCount * 10;
                 findings.push({
                     type: 'danger',
-                    title: 'Repetitive Denial',
-                    text: 'Excessive denial words - classic evasion tactic'
+                    title: `Excessive Denials (${denialCount})`,
+                    text: 'Repeating denials is a classic deception indicator'
                 });
             }
 
-            const pronouns = (text.match(/\b(I|we|you|he|she|it|they)\b/gi) || []).length;
+            // SELF CORRECTIONS
+            const corrections = (text.match(/(wait|actually|I mean|no wait|let me|I said|scratch that)/gi) || []).length;
+            if (corrections >= 1) {
+                score += corrections * 7;
+                breakdown.corrections = corrections * 7;
+                findings.push({
+                    type: 'warning',
+                    title: `Self-Corrections (${corrections})`,
+                    text: 'Changing story mid-sentence suggests confusion or fabrication'
+                });
+            }
+
+            // RESPONSE SPEED - If too short
             const totalWords = text.split(/\s+/).length;
-            if (pronouns > totalWords * 0.25) {
-                score -= 5;
+            if (totalWords < 8) {
+                score += 15;
+                breakdown.shortResponse = 15;
+                findings.push({
+                    type: 'warning',
+                    title: 'Very Short Response',
+                    text: 'Brief answers are hard to analyze - usually indicates evasion'
+                });
+            }
+
+            // CHECK FOR PRONOUNS (HONESTY INDICATOR)
+            const firstPersonCount = (text.match(/\bI\b/gi) || []).length;
+            if (firstPersonCount > totalWords * 0.3) {
+                score -= 15; // REDUCE if lots of "I"
+                breakdown.pronouns = -15;
                 findings.push({
                     type: 'success',
-                    title: 'Personal Pronouns',
-                    text: 'Good use of personal pronouns indicates confidence'
+                    title: 'Strong First-Person Usage',
+                    text: 'Good use of "I" suggests ownership and honesty'
+                });
+            } else if (firstPersonCount < totalWords * 0.05) {
+                score += 12;
+                breakdown.avoidPronoun = 12;
+                findings.push({
+                    type: 'danger',
+                    title: 'Avoiding Personal Pronouns',
+                    text: 'Lack of "I" suggests distancing from statement'
                 });
             }
 
-            const corrections = (text.match(/(no wait|actually|I mean|let me|I said)/gi) || []).length;
-            if (corrections > 2) {
-                score += corrections * 3;
+            // CHECK FOR QUESTIONS (Defensive)
+            const questions = (text.match(/\?/g) || []).length;
+            if (questions >= 2) {
+                score += questions * 5;
+                breakdown.questions = questions * 5;
                 findings.push({
                     type: 'warning',
-                    title: 'Self-Corrections',
-                    text: 'Multiple self-corrections detected'
+                    title: `Questions in Statement (${questions})`,
+                    text: 'Answering with questions is evasive'
                 });
             }
 
-            if (totalWords < 10) {
-                findings.push({
-                    type: 'warning',
-                    title: 'Very Brief Response',
-                    text: 'Short responses are harder to analyze for deception'
-                });
-                score += 5;
-            } else if (totalWords > 100) {
-                score += 3;
-                findings.push({
-                    type: 'warning',
-                    title: 'Extended Response',
-                    text: 'Unusually long response - may be over-explaining'
-                });
-            } else {
-                findings.push({
-                    type: 'success',
-                    title: 'Reasonable Length',
-                    text: 'Response length is appropriate for analysis'
-                });
-            }
-
+            // Normalize score to 0-100
             score = Math.min(100, Math.max(0, score));
-            displayResults(score, findings);
+
+            displayResults(score, findings, breakdown);
         }
 
-        function displayResults(score, findings) {
+        function displayResults(score, findings, breakdown) {
             const meterFill = document.getElementById('meterFill');
             const scoreValue = document.getElementById('scoreValue');
             const analysisResults = document.getElementById('analysisResults');
             const verdict = document.getElementById('verdict');
+            const scoreBreakdown = document.getElementById('scoreBreakdown');
 
             meterFill.style.width = score + '%';
             scoreValue.textContent = score + '%';
+
+            // Show score breakdown
+            let breakdownHTML = '<strong>Score Calculation:</strong><br>';
+            let totalShown = 0;
+            for (let key in breakdown) {
+                const value = breakdown[key];
+                breakdownHTML += `<div>+ ${value > 0 ? value : value} points (${key})</div>`;
+                totalShown += value;
+            }
+            breakdownHTML += `<div style="border-top: 1px solid #ddd; margin-top: 8px; padding-top: 8px;"><strong>Total: ${totalShown} + 50 (baseline) = ${Math.min(100, Math.max(0, totalShown + 50))}%</strong></div>`;
+            scoreBreakdown.innerHTML = breakdownHTML;
 
             let resultsHTML = '';
             findings.forEach(finding => {
                 resultsHTML += `<div class="result-item ${finding.type}"><strong>${finding.title}</strong><p>${finding.text}</p></div>`;
             });
 
-            analysisResults.innerHTML = resultsHTML;
+            analysisResults.innerHTML = resultsHTML || '<p style="color: #7f8c8d;">No suspicious patterns detected</p>';
 
             let verdictHTML = '';
             let verdictClass = '';
 
-            if (score < 30) {
-                verdictHTML = '✅ Likely Truthful';
+            if (score < 35) {
+                verdictHTML = '✅ Likely TRUTHFUL';
                 verdictClass = 'truth';
-            } else if (score < 60) {
-                verdictHTML = '⚠️ Uncertain';
+            } else if (score < 65) {
+                verdictHTML = '⚠️ UNCERTAIN - Need More Info';
                 verdictClass = 'uncertain';
             } else {
-                verdictHTML = '🚨 Likely Deceptive';
+                verdictHTML = '🚨 Likely DECEPTIVE';
                 verdictClass = 'lie';
             }
 
