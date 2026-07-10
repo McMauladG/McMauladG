@@ -351,12 +351,26 @@
             padding: 5px 0;
             color: #555;
         }
+
+        .info-box {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+            border-left: 4px solid #1565c0;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🎙️ Voice Lie Detector</h1>
         <p class="subtitle">Speak naturally and we'll analyze your statement</p>
+
+        <div class="info-box">
+            💡 <strong>Tip:</strong> Click "Stop Recording" when you're done speaking. The detector will NOT stop automatically!
+        </div>
 
         <div class="error-message" id="errorMessage"></div>
 
@@ -407,6 +421,7 @@
         let recognition;
         let isListening = false;
         let finalTranscript = '';
+        let silenceTimeout;
 
         function initSpeechRecognition() {
             if (!SpeechRecognition) {
@@ -425,7 +440,7 @@
                 document.getElementById('stopBtn').disabled = false;
                 document.getElementById('recordingIndicator').classList.add('active');
                 document.getElementById('waveform').classList.remove('inactive');
-                document.getElementById('statusText').textContent = 'Listening...';
+                document.getElementById('statusText').textContent = '🎤 Listening... (speak freely - won\'t auto-stop)';
                 finalTranscript = '';
             };
 
@@ -443,23 +458,27 @@
                 const displayText = finalTranscript + interimTranscript;
                 document.getElementById('transcriptText').textContent = displayText || 'Listening...';
                 document.getElementById('transcriptSection').classList.add('active');
+
+                // Restart the silence timeout
+                clearTimeout(silenceTimeout);
             };
 
             recognition.onerror = function(event) {
-                showError('Error: ' + event.error);
+                if (event.error === 'no-speech') {
+                    // Restart on silence instead of stopping
+                    recognition.stop();
+                    setTimeout(function() {
+                        if (isListening) {
+                            recognition.start();
+                        }
+                    }, 500);
+                } else {
+                    showError('Error: ' + event.error);
+                }
             };
 
             recognition.onend = function() {
-                isListening = false;
-                document.getElementById('recordingIndicator').classList.remove('active');
-                document.getElementById('waveform').classList.add('inactive');
-                document.getElementById('statusText').textContent = 'Recording stopped';
-                
-                if (finalTranscript.trim()) {
-                    setTimeout(() => {
-                        analyzeLie(finalTranscript);
-                    }, 500);
-                }
+                // Don't do anything automatic - wait for user to click stop
             };
 
             return true;
@@ -472,14 +491,25 @@
             
             clearError();
             finalTranscript = '';
+            isListening = true;
             recognition.start();
         }
 
         function stopListening() {
-            if (recognition && isListening) {
+            isListening = false;
+            if (recognition) {
                 recognition.stop();
-                document.getElementById('stopBtn').disabled = true;
-                document.getElementById('startBtn').disabled = false;
+            }
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('recordingIndicator').classList.remove('active');
+            document.getElementById('waveform').classList.add('inactive');
+            document.getElementById('statusText').textContent = '✓ Recording stopped';
+            
+            if (finalTranscript.trim()) {
+                setTimeout(() => {
+                    analyzeLie(finalTranscript);
+                }, 500);
             }
         }
 
@@ -489,11 +519,10 @@
                 return;
             }
 
-            let score = 50; // START AT 50 (neutral) instead of 0
+            let score = 50;
             const findings = [];
             const breakdown = {};
 
-            // FILLER WORDS - VERY IMPORTANT
             const fillers = ['um', 'uh', 'like', 'you know', 'er', 'ah', 'hmm', 'well', 'so', 'basically'];
             let fillerCount = 0;
             fillers.forEach(f => {
@@ -509,7 +538,6 @@
                 });
             }
 
-            // QUALIFIERS - STRONG INDICATOR
             const qualifiers = ['I think', 'I believe', 'I guess', 'maybe', 'probably', 'possibly', 'sort of', 'kind of', 'I suppose', 'somewhat'];
             let qualifierCount = 0;
             qualifiers.forEach(q => {
@@ -525,7 +553,6 @@
                 });
             }
 
-            // DENIALS - VERY SUSPICIOUS
             const denials = ['I didn\'t', 'I never', 'I wouldn\'t', 'I don\'t', 'didn\'t', 'never', 'no way'];
             let denialCount = 0;
             denials.forEach(d => {
@@ -541,7 +568,6 @@
                 });
             }
 
-            // SELF CORRECTIONS
             const corrections = (text.match(/(wait|actually|I mean|no wait|let me|I said|scratch that)/gi) || []).length;
             if (corrections >= 1) {
                 score += corrections * 7;
@@ -553,7 +579,6 @@
                 });
             }
 
-            // RESPONSE SPEED - If too short
             const totalWords = text.split(/\s+/).length;
             if (totalWords < 8) {
                 score += 15;
@@ -565,10 +590,9 @@
                 });
             }
 
-            // CHECK FOR PRONOUNS (HONESTY INDICATOR)
             const firstPersonCount = (text.match(/\bI\b/gi) || []).length;
             if (firstPersonCount > totalWords * 0.3) {
-                score -= 15; // REDUCE if lots of "I"
+                score -= 15;
                 breakdown.pronouns = -15;
                 findings.push({
                     type: 'success',
@@ -585,7 +609,6 @@
                 });
             }
 
-            // CHECK FOR QUESTIONS (Defensive)
             const questions = (text.match(/\?/g) || []).length;
             if (questions >= 2) {
                 score += questions * 5;
@@ -597,7 +620,6 @@
                 });
             }
 
-            // Normalize score to 0-100
             score = Math.min(100, Math.max(0, score));
 
             displayResults(score, findings, breakdown);
@@ -613,7 +635,6 @@
             meterFill.style.width = score + '%';
             scoreValue.textContent = score + '%';
 
-            // Show score breakdown
             let breakdownHTML = '<strong>Score Calculation:</strong><br>';
             let totalShown = 0;
             for (let key in breakdown) {
