@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Lie Detector</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 700px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-size: 1em;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .start-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .start-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .stop-btn {
+            background: #e74c3c;
+            color: white;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .stop-btn:hover:not(:disabled) {
+            background: #c0392b;
+            box-shadow: 0 5px 20px rgba(231, 76, 60, 0.4);
+        }
+
+        .reset-btn {
+            background: #95a5a6;
+            color: white;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .reset-btn:hover:not(:disabled) {
+            background: #7f8c8d;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status-box {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .status-text {
+            color: #2c3e50;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .recording-indicator {
+            display: none;
+            width: 20px;
+            height: 20px;
+            background: #e74c3c;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        .recording-indicator.active {
+            display: inline-block;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .waveform {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            height: 40px;
+        }
+
+        .wave-bar {
+            background: #667eea;
+            border-radius: 2px;
+            width: 4px;
+            height: 20px;
+            animation: wavePulse 0.6s ease-in-out infinite;
+        }
+
+        .wave-bar:nth-child(1) { animation-delay: 0s; }
+        .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+        .wave-bar:nth-child(3) { animation-delay: 0.2s; }
+        .wave-bar:nth-child(4) { animation-delay: 0.3s; }
+        .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+
+        @keyframes wavePulse {
+            0%, 100% { height: 10px; }
+            50% { height: 30px; }
+        }
+
+        .waveform.inactive .wave-bar {
+            animation: none;
+            height: 15px;
+        }
+
+        .transcript-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .transcript-section.active {
+            display: block;
+        }
+
+        .transcript-label {
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .transcript-text {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            color: #555;
+            line-height: 1.6;
+            min-height: 60px;
+            border-left: 4px solid #3498db;
+        }
+
+        .result-section {
+            display: none;
+            animation: slideIn 0.5s ease;
+        }
+
+        .result-section.active {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .meter {
+            margin-bottom: 20px;
+        }
+
+        .meter-label {
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .meter-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .meter-bar {
+            width: 100%;
+            height: 30px;
+            background: #ecf0f1;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .meter-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2ecc71 0%, #f1c40f 50%, #e74c3c 100%);
+            width: 0%;
+            transition: width 0.6s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .analysis-results {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .result-item {
+            margin-bottom: 15px;
+            padding: 12px;
+            background: white;
+            border-left: 4px solid #3498db;
+            border-radius: 5px;
+        }
+
+        .result-item.warning {
+            border-left-color: #f39c12;
+        }
+
+        .result-item.danger {
+            border-left-color: #e74c3c;
+        }
+
+        .result-item.success {
+            border-left-color: #2ecc71;
+        }
+
+        .result-item strong {
+            color: #2c3e50;
+        }
+
+        .result-item p {
+            color: #555;
+            margin-top: 5px;
+            font-size: 0.95em;
+        }
+
+        .verdict {
+            text-align: center;
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+
+        .verdict.truth {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #28a745;
+        }
+
+        .verdict.lie {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+
+        .verdict.uncertain {
+            background: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffeaa7;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ Voice Lie Detector</h1>
+        <p class="subtitle">Speak naturally and we'll analyze your statement</p>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="status-box">
+            <div class="recording-indicator" id="recordingIndicator"></div>
+            <div class="status-text" id="statusText">Ready to listen</div>
+            <div class="waveform inactive" id="waveform">
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button class="start-btn" id="startBtn" onclick="startListening()">🎤 Start Recording</button>
+            <button class="stop-btn" id="stopBtn" onclick="stopListening()" disabled>⏹️ Stop Recording</button>
+            <button class="reset-btn" id="resetBtn" onclick="resetForm()">🔄 Reset</button>
+        </div>
+
+        <div class="transcript-section" id="transcriptSection">
+            <div class="transcript-label">Transcribed Text:</div>
+            <div class="transcript-text" id="transcriptText"></div>
+        </div>
+
+        <div class="result-section" id="resultSection">
+            <div class="meter">
+                <div class="meter-label">
+                    <span>Deception Likelihood</span>
+                    <span class="meter-value" id="scoreValue">0%</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="meterFill"></div>
+                </div>
+            </div>
+
+            <div class="analysis-results" id="analysisResults"></div>
+
+            <div class="verdict" id="verdict"></div>
+        </div>
+    </div>
+
+    <script>
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        let isListening = false;
+        let finalTranscript = '';
+
+        function initSpeechRecognition() {
+            if (!SpeechRecognition) {
+                showError('Speech Recognition not supported in your browser. Please use Chrome, Edge, or Safari.');
+                return false;
+            }
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = function() {
+                isListening = true;
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('recordingIndicator').classList.add('active');
+                document.getElementById('waveform').classList.remove('inactive');
+                document.getElementById('statusText').textContent = 'Listening...';
+                finalTranscript = '';
+            };
+
+            recognition.onresult = function(event) {
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                const displayText = finalTranscript + interimTranscript;
+                document.getElementById('transcriptText').textContent = displayText || 'Listening...';
+                document.getElementById('transcriptSection').classList.add('active');
+            };
+
+            recognition.onerror = function(event) {
+                showError('Error: ' + event.error);
+            };
+
+            recognition.onend = function() {
+                isListening = false;
+                document.getElementById('recordingIndicator').classList.remove('active');
+                document.getElementById('waveform').classList.add('inactive');
+                document.getElementById('statusText').textContent = 'Recording stopped';
+                
+                if (finalTranscript.trim()) {
+                    setTimeout(() => {
+                        analyzeLie(finalTranscript);
+                    }, 500);
+                }
+            };
+
+            return true;
+        }
+
+        function startListening() {
+            if (!recognition) {
+                if (!initSpeechRecognition()) return;
+            }
+            
+            clearError();
+            finalTranscript = '';
+            recognition.start();
+        }
+
+        function stopListening() {
+            if (recognition && isListening) {
+                recognition.stop();
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('startBtn').disabled = false;
+            }
+        }
+
+        function analyzeLie(text) {
+            if (!text.trim()) {
+                showError('No speech detected. Please try again.');
+                return;
+            }
+
+            let score = 0;
+            const findings = [];
+
+            const punctCount = (text.match(/[!?]{2,}/g) || []).length;
+            if (punctCount > 0) {
+                score += punctCount * 5;
+                findings.push({
+                    type: 'warning',
+                    title: 'Emphatic Tone',
+                    text: 'Detected emphatic punctuation marks'
+                });
+            }
+
+            const fillers = ['um', 'uh', 'like', 'you know', 'er', 'ah', 'hmm'];
+            let fillerCount = 0;
+            fillers.forEach(f => {
+                fillerCount += (text.match(new RegExp('\\b' + f + '\\b', 'gi')) || []).length;
+            });
+            if (fillerCount > 5) {
+                score += Math.min(15, fillerCount * 2);
+                findings.push({
+                    type: 'warning',
+                    title: 'Excessive Filler Words',
+                    text: 'Multiple filler words detected - may indicate hesitation'
+                });
+            }
+
+            const qualifiers = ['I think', 'I believe', 'maybe', 'probably', 'possibly', 'somewhat', 'kind of', 'sort of', 'I guess'];
+            let qualifierCount = 0;
+            qualifiers.forEach(q => {
+                qualifierCount += (text.match(new RegExp(q, 'gi')) || []).length;
+            });
+            if (qualifierCount > 2) {
+                score += qualifierCount * 3;
+                findings.push({
+                    type: 'warning',
+                    title: 'Defensive Qualifiers',
+                    text: 'Qualifying phrases suggest uncertainty'
+                });
+            }
+
+            const denials = ['I didn\'t', 'I never', 'I wouldn\'t', 'I don\'t', 'not', 'no', 'never'];
+            let denialCount = 0;
+            denials.forEach(d => {
+                denialCount += (text.match(new RegExp('\\b' + d + '\\b', 'gi')) || []).length;
+            });
+            if (denialCount > 4) {
+                score += denialCount * 2;
+                findings.push({
+                    type: 'danger',
+                    title: 'Repetitive Denial',
+                    text: 'Excessive denial words - classic evasion tactic'
+                });
+            }
+
+            const pronouns = (text.match(/\b(I|we|you|he|she|it|they)\b/gi) || []).length;
+            const totalWords = text.split(/\s+/).length;
+            if (pronouns > totalWords * 0.25) {
+                score -= 5;
+                findings.push({
+                    type: 'success',
+                    title: 'Personal Pronouns',
+                    text: 'Good use of personal pronouns indicates confidence'
+                });
+            }
+
+            const corrections = (text.match(/(no wait|actually|I mean|let me|I said)/gi) || []).length;
+            if (corrections > 2) {
+                score += corrections * 3;
+                findings.push({
+                    type: 'warning',
+                    title: 'Self-Corrections',
+                    text: 'Multiple self-corrections detected'
+                });
+            }
+
+            if (totalWords < 10) {
+                findings.push({
+                    type: 'warning',
+                    title: 'Very Brief Response',
+                    text: 'Short responses are harder to analyze for deception'
+                });
+                score += 5;
+            } else if (totalWords > 100) {
+                score += 3;
+                findings.push({
+                    type: 'warning',
+                    title: 'Extended Response',
+                    text: 'Unusually long response - may be over-explaining'
+                });
+            } else {
+                findings.push({
+                    type: 'success',
+                    title: 'Reasonable Length',
+                    text: 'Response length is appropriate for analysis'
+                });
+            }
+
+            score = Math.min(100, Math.max(0, score));
+            displayResults(score, findings);
+        }
+
+        function displayResults(score, findings) {
+            const meterFill = document.getElementById('meterFill');
+            const scoreValue = document.getElementById('scoreValue');
+            const analysisResults = document.getElementById('analysisResults');
+            const verdict = document.getElementById('verdict');
+
+            meterFill.style.width = score + '%';
+            scoreValue.textContent = score + '%';
+
+            let resultsHTML = '';
+            findings.forEach(finding => {
+                resultsHTML += `<div class="result-item ${finding.type}"><strong>${finding.title}</strong><p>${finding.text}</p></div>`;
+            });
+
+            analysisResults.innerHTML = resultsHTML;
+
+            let verdictHTML = '';
+            let verdictClass = '';
+
+            if (score < 30) {
+                verdictHTML = '✅ Likely Truthful';
+                verdictClass = 'truth';
+            } else if (score < 60) {
+                verdictHTML = '⚠️ Uncertain';
+                verdictClass = 'uncertain';
+            } else {
+                verdictHTML = '🚨 Likely Deceptive';
+                verdictClass = 'lie';
+            }
+
+            verdict.innerHTML = verdictHTML;
+            verdict.className = 'verdict ' + verdictClass;
+
+            document.getElementById('resultSection').classList.add('active');
+        }
+
+        function resetForm() {
+            finalTranscript = '';
+            document.getElementById('transcriptText').textContent = '';
+            document.getElementById('transcriptSection').classList.remove('active');
+            document.getElementById('resultSection').classList.remove('active');
+            document.getElementById('statusText').textContent = 'Ready to listen';
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            clearError();
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.classList.add('active');
+        }
+
+        function clearError() {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.classList.remove('active');
+        }
+
+        window.addEventListener('load', function() {
+            initSpeechRecognition();
+        });
+    </script>
+</body>
+</html>
